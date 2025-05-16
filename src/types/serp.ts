@@ -19,3 +19,9 @@ export interface SerpData {
   peopleAlsoAsk?: string[];
   ads?: SerpResultItem[];
 }
+
+export interface ContentAnalysisData {
+  gapSummary: string;
+  improvementSuggestions: string[];
+  keywordOpportunities: string[];
+}

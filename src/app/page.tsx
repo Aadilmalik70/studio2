@@ -6,22 +6,22 @@ import { useState } from 'react';
 import { Logo } from '@/components/logo';
 import { QueryForm, type QueryFormData } from '@/components/query-form';
 import { ResultsDisplay } from '@/components/results-display';
-import type { SerpData } from '@/types/serp';
+import type { SerpData, ContentAnalysisData } from '@/types/serp';
 import { analyzeSerp, type AnalyzeSerpOutput } from '@/ai/flows/analyze-serp';
-import { fetchSerpDataAction } from '@/actions/fetch-serp-data'; // Import the server action
+import { analyzeContentGap } from '@/ai/flows/analyze-content-gap';
+import { fetchSerpDataAction } from '@/actions/fetch-serp-data';
+import { fetchPageContentAction } from '@/actions/fetch-page-content';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Terminal, Eye as EyeIconLucide } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 
 interface PageResults {
   serpData: SerpData;
   analysis: AnalyzeSerpOutput;
 }
-
-// Mock SERP data generation function is now moved to the server action.
 
 const LoadingSkeleton: React.FC = () => (
   <div className="mt-12 space-y-8">
@@ -60,13 +60,20 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const [analysisByUrl, setAnalysisByUrl] = useState<Record<string, ContentAnalysisData | null>>({});
+  const [loadingAnalysisUrl, setLoadingAnalysisUrl] = useState<string | null>(null);
+  const [errorAnalysisByUrl, setErrorAnalysisByUrl] = useState<Record<string, string | null>>({});
+
+
   const handleQuerySubmit = async (data: QueryFormData) => {
     setIsLoading(true);
     setError(null);
     setResults(null);
+    setAnalysisByUrl({}); // Reset individual content analyses
+    setLoadingAnalysisUrl(null);
+    setErrorAnalysisByUrl({});
 
     try {
-      // Step 1 & 2: Fetch SERP Data using the Server Action
       const fetchedSerpData = await fetchSerpDataAction(data);
       
       if (!fetchedSerpData) {
@@ -75,7 +82,6 @@ export default function HomePage() {
       
       const serpDataString = JSON.stringify(fetchedSerpData);
 
-      // Step 3: SERP Analysis (GenAI)
       const analysisOutput = await analyzeSerp({
         query: data.query,
         serpData: serpDataString,
@@ -91,7 +97,7 @@ export default function HomePage() {
       });
 
       toast({
-        title: "Analysis Complete",
+        title: "SERP Analysis Complete",
         description: `SERP data for "${data.query}" analyzed successfully.`,
       });
 
@@ -109,6 +115,57 @@ export default function HomePage() {
     }
   };
 
+  const handleAnalyzeContent = async (url: string, query: string) => {
+    setLoadingAnalysisUrl(url);
+    setErrorAnalysisByUrl(prev => ({ ...prev, [url]: null }));
+    setAnalysisByUrl(prev => ({ ...prev, [url]: null })); // Clear previous analysis for this URL
+
+    try {
+      toast({
+        title: "Fetching Page Content...",
+        description: `Attempting to retrieve content from ${url}`,
+      });
+      const pageContentResult = await fetchPageContentAction(url);
+
+      if (pageContentResult.error || !pageContentResult.content) {
+        throw new Error(pageContentResult.error || "Failed to fetch page content or content is empty.");
+      }
+
+      toast({
+        title: "Analyzing Content Gaps...",
+        description: `AI is analyzing content from ${url} for query "${query}".`,
+      });
+      const contentAnalysis = await analyzeContentGap({
+        query,
+        pageUrl: url,
+        pageContent: pageContentResult.content,
+      });
+
+      if (!contentAnalysis) {
+        throw new Error("AI content gap analysis did not return any data.");
+      }
+
+      setAnalysisByUrl(prev => ({ ...prev, [url]: contentAnalysis }));
+      toast({
+        title: "Content Analysis Complete",
+        description: `Gap analysis for ${url} finished.`,
+      });
+
+    } catch (e) {
+      console.error(`Error analyzing content for ${url}:`, e);
+      const errorMessage = e instanceof Error ? e.message : "An unknown error occurred during content analysis.";
+      setErrorAnalysisByUrl(prev => ({ ...prev, [url]: errorMessage }));
+      toast({
+        variant: "destructive",
+        title: "Content Analysis Failed",
+        description: `Could not analyze ${url}: ${errorMessage}`,
+      });
+    } finally {
+      setLoadingAnalysisUrl(null);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <main className="container mx-auto px-4 py-8 md:px-6 md:py-12">
@@ -117,7 +174,7 @@ export default function HomePage() {
             <Logo />
           </div>
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Unlock powerful insights from Search Engine Results Pages. Enter your query below and let our AI provide a comprehensive analysis.
+            Unlock powerful insights from Search Engine Results Pages. Enter your query and let AI provide a comprehensive analysis, then dive deeper by analyzing individual page content.
           </p>
         </header>
 
@@ -126,7 +183,7 @@ export default function HomePage() {
         {error && (
            <Alert variant="destructive" className="mt-8">
              <Terminal className="h-4 w-4" />
-             <AlertTitle>Analysis Failed</AlertTitle>
+             <AlertTitle>SERP Analysis Failed</AlertTitle>
              <AlertDescription>{error}</AlertDescription>
            </Alert>
         )}
@@ -134,7 +191,14 @@ export default function HomePage() {
         {isLoading && <LoadingSkeleton />}
 
         {!isLoading && !error && results && (
-          <ResultsDisplay serpData={results.serpData} analysis={results.analysis} />
+          <ResultsDisplay 
+            serpData={results.serpData} 
+            analysis={results.analysis}
+            onAnalyzeContent={handleAnalyzeContent}
+            analysisByUrl={analysisByUrl}
+            loadingAnalysisUrl={loadingAnalysisUrl}
+            errorAnalysisByUrl={errorAnalysisByUrl}
+          />
         )}
         
         {!isLoading && !error && !results && (
@@ -153,7 +217,8 @@ export default function HomePage() {
       </main>
       <footer className="text-center py-8 border-t border-border mt-16">
         <p className="text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} SERP Eye. All rights reserved.
+          &copy; {new Date().getFullYear()} SERP Eye. All rights reserved. <br />
+          Content analysis is AI-generated and may require verification. Fetched page content is raw HTML.
         </p>
       </footer>
     </div>

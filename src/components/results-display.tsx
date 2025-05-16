@@ -1,31 +1,117 @@
+
 "use client";
 
-import type { SerpData, SerpResultItem } from '@/types/serp';
+import type { SerpData, SerpResultItem, ContentAnalysisData } from '@/types/serp';
 import type { AnalyzeSerpOutput } from '@/ai/flows/analyze-serp';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import { Newspaper, Star, HelpCircle, Megaphone, Sparkles, Link as LinkIcon, ExternalLink } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Newspaper, Star, HelpCircle, Megaphone, Sparkles, ExternalLink, BrainCircuit, Loader2, AlertTriangle } from 'lucide-react';
 
 interface ResultsDisplayProps {
   serpData: SerpData;
   analysis: AnalyzeSerpOutput;
+  onAnalyzeContent: (url: string, query: string) => void;
+  analysisByUrl: Record<string, ContentAnalysisData | null>;
+  loadingAnalysisUrl: string | null;
+  errorAnalysisByUrl: Record<string, string | null>;
 }
 
-const ResultItemCard: React.FC<{ item: SerpResultItem, index: number }> = ({ item, index }) => (
-  <div className="mb-4 p-4 border rounded-md shadow-sm hover:shadow-md transition-shadow bg-background">
-    <div className="flex items-center justify-between mb-1">
-      <h3 className="text-lg font-semibold text-primary">{`${index + 1}. ${item.title}`}</h3>
-      <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:underline flex items-center">
-        Visit <ExternalLink className="ml-1 h-4 w-4" />
-      </a>
-    </div>
-    <p className="text-sm text-muted-foreground truncate ">{item.link}</p>
-    <p className="mt-2 text-sm">{item.snippet}</p>
-  </div>
+const ResultItemCard: React.FC<{ 
+  item: SerpResultItem; 
+  index: number;
+  query: string;
+  onAnalyzeContent: (url: string, query: string) => void;
+  analysisData: ContentAnalysisData | null;
+  isLoading: boolean;
+  error: string | null;
+}> = ({ item, index, query, onAnalyzeContent, analysisData, isLoading, error }) => (
+  <Card className="mb-4 shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden">
+    <CardHeader className="pb-2">
+      <div className="flex items-start justify-between mb-1 gap-2">
+        <CardTitle className="text-lg text-primary leading-tight">{`${index + 1}. ${item.title}`}</CardTitle>
+        <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-sm text-accent hover:underline flex items-center shrink-0">
+          Visit <ExternalLink className="ml-1 h-4 w-4" />
+        </a>
+      </div>
+      <p className="text-xs text-muted-foreground truncate ">{item.link}</p>
+    </CardHeader>
+    <CardContent className="pb-3 pt-1">
+      <p className="text-sm">{item.snippet}</p>
+    </CardContent>
+    <CardFooter className="flex-col items-start gap-3 pt-0 pb-4 px-6">
+       <Button 
+        onClick={() => onAnalyzeContent(item.link, query)} 
+        disabled={isLoading}
+        variant="outline"
+        size="sm"
+        className="w-full md:w-auto"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Analyzing Content...
+          </>
+        ) : (
+          <>
+            <BrainCircuit className="mr-2 h-4 w-4" />
+            Analyze Content Gaps
+          </>
+        )}
+      </Button>
+      {error && (
+        <Alert variant="destructive" className="w-full">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Analysis Error</AlertTitle>
+          <AlertDescription className="text-xs">{error}</AlertDescription>
+        </Alert>
+      )}
+      {analysisData && !isLoading && !error && (
+        <Card className="w-full mt-3 bg-background/50 p-0">
+          <CardHeader className="pb-2 pt-3 px-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <BrainCircuit className="h-5 w-5 text-primary" />
+              Content Gap Analysis
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm px-4 pb-4">
+            <div className="mb-2">
+              <h4 className="font-semibold text-primary/90">Gap Summary:</h4>
+              <p className="text-xs">{analysisData.gapSummary}</p>
+            </div>
+            <div className="mb-2">
+              <h4 className="font-semibold text-primary/90">Improvement Suggestions:</h4>
+              <ul className="list-disc pl-4 text-xs space-y-0.5">
+                {analysisData.improvementSuggestions.map((suggestion, i) => (
+                  <li key={i}>{suggestion}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-primary/90">Keyword Opportunities:</h4>
+              <ul className="list-disc pl-4 text-xs space-y-0.5">
+                {analysisData.keywordOpportunities.map((keyword, i) => (
+                  <li key={i}>{keyword}</li>
+                ))}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </CardFooter>
+  </Card>
 );
 
-export function ResultsDisplay({ serpData, analysis }: ResultsDisplayProps) {
+export function ResultsDisplay({ 
+  serpData, 
+  analysis, 
+  onAnalyzeContent,
+  analysisByUrl,
+  loadingAnalysisUrl,
+  errorAnalysisByUrl 
+}: ResultsDisplayProps) {
   return (
     <div className="mt-12 space-y-8">
       <Card className="shadow-xl">
@@ -43,7 +129,7 @@ export function ResultsDisplay({ serpData, analysis }: ResultsDisplayProps) {
         </CardContent>
       </Card>
 
-      <Accordion type="multiple" className="w-full space-y-4">
+      <Accordion type="multiple" defaultValue={["organic-results"]} className="w-full space-y-4">
         {serpData.featuredSnippet && (
           <AccordionItem value="featured-snippet">
              <Card className="overflow-hidden">
@@ -75,7 +161,16 @@ export function ResultsDisplay({ serpData, analysis }: ResultsDisplayProps) {
               </AccordionTrigger>
               <AccordionContent className="p-6">
                 {serpData.organicResults.map((item, index) => (
-                  <ResultItemCard key={`organic-${index}`} item={item} index={index}/>
+                  <ResultItemCard 
+                    key={`organic-${index}-${item.link}`} 
+                    item={item} 
+                    index={index}
+                    query={serpData.query}
+                    onAnalyzeContent={onAnalyzeContent}
+                    analysisData={analysisByUrl[item.link] || null}
+                    isLoading={loadingAnalysisUrl === item.link}
+                    error={errorAnalysisByUrl[item.link] || null}
+                  />
                 ))}
               </AccordionContent>
             </Card>
@@ -113,7 +208,16 @@ export function ResultsDisplay({ serpData, analysis }: ResultsDisplayProps) {
               </AccordionTrigger>
               <AccordionContent className="p-6">
                 {serpData.ads.map((item, index) => (
-                   <ResultItemCard key={`ad-${index}`} item={item} index={index}/>
+                   <ResultItemCard 
+                    key={`ad-${index}-${item.link}`} 
+                    item={item} 
+                    index={index}
+                    query={serpData.query} // Ads might not be suitable for content gap analysis, but pass query for consistency
+                    onAnalyzeContent={onAnalyzeContent}
+                    analysisData={analysisByUrl[item.link] || null}
+                    isLoading={loadingAnalysisUrl === item.link}
+                    error={errorAnalysisByUrl[item.link] || null}
+                  />
                 ))}
               </AccordionContent>
             </Card>
@@ -123,3 +227,4 @@ export function ResultsDisplay({ serpData, analysis }: ResultsDisplayProps) {
     </div>
   );
 }
+
