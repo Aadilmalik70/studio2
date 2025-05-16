@@ -15,14 +15,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Loader2, AlertTriangle, HelpCircle, ListChecks, BarChart3, ShieldAlert, CircleDollarSign } from 'lucide-react';
+import { Search, Loader2, AlertTriangle, HelpCircle, ListChecks, TrendingUp, CheckCircle } from 'lucide-react'; // Replaced icons
+import { Badge } from "@/components/ui/badge"; // Added Badge import
 
 import { fetchKeywordDataAction } from '@/actions/fetch-keyword-data';
 import type { KeywordResearchData, KeywordIdea } from '@/types/serp';
 import { useToast } from '@/hooks/use-toast';
 
 const keywordResearchFormSchema = z.object({
-  seedKeyword: z.string().min(2, "Seed keyword must be at least 2 characters long."),
+  seedKeyword: z.string().min(1, "Seed keyword must be at least 1 character long."), // Google Trends allows single char
 });
 
 type KeywordResearchFormData = z.infer<typeof keywordResearchFormSchema>;
@@ -76,13 +77,13 @@ export function KeywordResearchTool() {
     try {
       toast({
         title: "Starting Keyword Research...",
-        description: `Fetching data for "${data.seedKeyword}".`,
+        description: `Fetching Google Trends data for "${data.seedKeyword}".`,
       });
       const fetchedData = await fetchKeywordDataAction(data.seedKeyword);
       setResults(fetchedData);
       toast({
         title: "Keyword Research Complete",
-        description: `Data for "${data.seedKeyword}" fetched successfully.`,
+        description: `Google Trends data for "${data.seedKeyword}" fetched successfully.`,
       });
     } catch (e) {
       console.error("Error fetching keyword data:", e);
@@ -102,10 +103,9 @@ export function KeywordResearchTool() {
     <div className="space-y-8 py-8">
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Keyword Research Tool</CardTitle>
+          <CardTitle className="text-2xl">Keyword Trends & Ideas</CardTitle>
           <CardDescription>
-            Enter a seed keyword to discover related terms, questions, and potential search metrics. 
-            (Currently uses mock data)
+            Enter a seed keyword to discover related queries and questions from Google Trends via SerpApi.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -118,7 +118,7 @@ export function KeywordResearchTool() {
                   <FormItem>
                     <FormLabel htmlFor="seedKeyword" className="text-base">Seed Keyword</FormLabel>
                     <FormControl>
-                      <Input id="seedKeyword" placeholder="e.g., 'content marketing'" {...field} />
+                      <Input id="seedKeyword" placeholder="e.g., 'ai content creation'" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -128,12 +128,12 @@ export function KeywordResearchTool() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Researching...
+                    Researching Trends...
                   </>
                 ) : (
                   <>
                     <Search className="mr-2 h-4 w-4" />
-                    Research Keywords
+                    Research Trends
                   </>
                 )}
               </Button>
@@ -158,10 +158,10 @@ export function KeywordResearchTool() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <ListChecks className="h-6 w-6 text-primary" />
-                Related Keywords for "{results.seedKeyword}"
+                Related Queries for "{results.seedKeyword}"
               </CardTitle>
               <CardDescription>
-                Explore related terms and their estimated metrics. (Metrics are mock data)
+                Explore related queries and their relative interest score (0-100) from Google Trends.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -172,36 +172,32 @@ export function KeywordResearchTool() {
                       <TableHead>Keyword</TableHead>
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
-                          <BarChart3 className="h-4 w-4" /> Volume
+                           <TrendingUp className="h-4 w-4" /> Interest Score
                         </span>
                       </TableHead>
                       <TableHead className="text-right">
                         <span className="flex items-center justify-end gap-1">
-                           <ShieldAlert className="h-4 w-4" /> Difficulty
+                           <CheckCircle className="h-4 w-4" /> Type
                         </span>
                       </TableHead>
-                       <TableHead className="text-right">
-                        <span className="flex items-center justify-end gap-1">
-                           <CircleDollarSign className="h-4 w-4" /> CPC (USD)
-                        </span>
-                      </TableHead>
-                       <TableHead className="text-right">Competition</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {results.relatedKeywords.map((idea) => (
-                      <TableRow key={idea.keyword}>
+                      <TableRow key={`${idea.keyword}-${idea.type}`}>
                         <TableCell className="font-medium">{idea.keyword}</TableCell>
-                        <TableCell className="text-right">{idea.volume?.toLocaleString() || 'N/A'}</TableCell>
-                        <TableCell className="text-right">{idea.difficulty || 'N/A'}</TableCell>
-                        <TableCell className="text-right">{idea.cpc?.toFixed(2) || 'N/A'}</TableCell>
-                        <TableCell className="text-right">{idea.competition !== undefined ? `${(idea.competition * 100).toFixed(0)}%` : 'N/A'}</TableCell>
+                        <TableCell className="text-right">{idea.interestScore !== undefined ? idea.interestScore : 'N/A'}</TableCell>
+                        <TableCell className="text-right">
+                          {idea.type === 'top' && <Badge variant="secondary">Top</Badge>}
+                          {idea.type === 'rising' && <Badge variant="outline" className="text-accent border-accent">Rising</Badge>}
+                          {!idea.type && 'N/A'}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               ) : (
-                <p className="text-muted-foreground">No related keywords found.</p>
+                <p className="text-muted-foreground">No related queries found for this term in Google Trends.</p>
               )}
             </CardContent>
           </Card>
@@ -210,9 +206,11 @@ export function KeywordResearchTool() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HelpCircle className="h-6 w-6 text-primary" />
-                Related Questions
+                Potential Questions
               </CardTitle>
-              <CardDescription>Common questions users ask related to "{results.seedKeyword}".</CardDescription>
+              <CardDescription>
+                Queries phrased as questions related to "{results.seedKeyword}", derived from Google Trends data.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {results.questions.length > 0 ? (
@@ -222,7 +220,7 @@ export function KeywordResearchTool() {
                   ))}
                 </ul>
               ) : (
-                <p className="text-muted-foreground">No related questions found.</p>
+                <p className="text-muted-foreground">No related queries phrased as questions found in Google Trends.</p>
               )}
             </CardContent>
           </Card>

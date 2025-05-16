@@ -1,3 +1,4 @@
+
 export interface SerpResultItem {
   title: string;
   link: string;
@@ -26,18 +27,20 @@ export interface ContentAnalysisData {
   keywordOpportunities: string[];
 }
 
-// New types for Keyword Research
+// Updated types for Keyword Research
 export interface KeywordIdea {
   keyword: string;
-  volume?: number; // Monthly search volume
-  difficulty?: number; // SEO difficulty (e.g., 0-100)
-  cpc?: number; // Cost Per Click (USD)
-  competition?: number; // Competition level (e.g., 0-1, where 1 is high)
+  interestScore?: number; // Interest score from Google Trends (e.g., 0-100)
+  type?: 'top' | 'rising'; // Indicates if the query is 'top' or 'rising'
+  // Kept original metrics as optional in case of future integration with other APIs
+  volume?: number; 
+  difficulty?: number;
+  cpc?: number; 
+  competition?: number;
 }
 
 export interface KeywordResearchData {
   seedKeyword: string;
   relatedKeywords: KeywordIdea[];
   questions: string[];
-  // You can add more fields here as needed, like trend data, etc.
 }
