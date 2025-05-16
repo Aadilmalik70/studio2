@@ -1,3 +1,4 @@
+
 "use client";
 
 import type * as React from 'react';
@@ -7,51 +8,20 @@ import { QueryForm, type QueryFormData } from '@/components/query-form';
 import { ResultsDisplay } from '@/components/results-display';
 import type { SerpData } from '@/types/serp';
 import { analyzeSerp, type AnalyzeSerpOutput } from '@/ai/flows/analyze-serp';
+import { fetchSerpDataAction } from '@/actions/fetch-serp-data'; // Import the server action
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal, Eye as EyeIconLucide } from "lucide-react"; // Renamed Eye to EyeIconLucide to avoid conflict
+import { Terminal, Eye as EyeIconLucide } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 
 interface PageResults {
   serpData: SerpData;
   analysis: AnalyzeSerpOutput;
 }
 
-// Mock SERP data generation function
-function generateMockSerpData(formData: QueryFormData): SerpData {
-  const numOrganic = Math.min(formData.numResults, 10); // Cap mock organic results
-  return {
-    query: formData.query,
-    searchEngine: formData.searchEngine,
-    numResults: formData.numResults,
-    geoLocation: formData.geoLocation,
-    organicResults: Array.from({ length: numOrganic }, (_, i) => ({
-      title: `Mock Organic Result ${i + 1} for "${formData.query}"`,
-      link: `https://example.com/search?q=${encodeURIComponent(formData.query)}&result=${i + 1}`,
-      snippet: `This is a mock snippet for organic result ${i + 1}. Search engine: ${formData.searchEngine}. Location: ${formData.geoLocation || 'N/A'}.`,
-      position: i + 1,
-    })),
-    featuredSnippet: Math.random() > 0.5 ? {
-      title: `Mock Featured Snippet for "${formData.query}"`,
-      link: `https://example.com/featured?q=${encodeURIComponent(formData.query)}`,
-      snippet: `This is a detailed mock featured snippet. It provides a quick answer to the query.`,
-    } : undefined,
-    peopleAlsoAsk: Math.random() > 0.3 ? [
-      `What is ${formData.query}?`,
-      `How to use ${formData.query}?`,
-      `Best practices for ${formData.query}.`,
-      `Compare ${formData.query} with alternatives.`,
-    ].slice(0, Math.floor(Math.random() * 4) + 1) : undefined,
-    ads: Math.random() > 0.6 ? Array.from({ length: Math.floor(Math.random() * 3) + 1 }, (_, i) => ({
-      title: `Ad: Top Solution for ${formData.query} - Offer ${i + 1}`,
-      link: `https://example.com/ad?q=${encodeURIComponent(formData.query)}&id=${i + 1}`,
-      snippet: `Limited time offer! Get the best deals for ${formData.query} now. This is ad number ${i + 1}.`,
-      position: i + 1,
-    })) : undefined,
-  };
-}
-
+// Mock SERP data generation function is now moved to the server action.
 
 const LoadingSkeleton: React.FC = () => (
   <div className="mt-12 space-y-8">
@@ -96,9 +66,14 @@ export default function HomePage() {
     setResults(null);
 
     try {
-      // Step 1 & 2: Mock SERP Fetching and Data Extraction
-      const mockSerp: SerpData = generateMockSerpData(data);
-      const serpDataString = JSON.stringify(mockSerp);
+      // Step 1 & 2: Fetch SERP Data using the Server Action
+      const fetchedSerpData = await fetchSerpDataAction(data);
+      
+      if (!fetchedSerpData) {
+        throw new Error("Failed to fetch SERP data from the server.");
+      }
+      
+      const serpDataString = JSON.stringify(fetchedSerpData);
 
       // Step 3: SERP Analysis (GenAI)
       const analysisOutput = await analyzeSerp({
@@ -111,7 +86,7 @@ export default function HomePage() {
       }
       
       setResults({
-        serpData: mockSerp,
+        serpData: fetchedSerpData,
         analysis: analysisOutput,
       });
 
@@ -201,10 +176,3 @@ const EyeIllustration: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     <line x1="4.93" y1="19.07" x2="8" y2="16" />
   </svg>
 );
-
-// Ensure Eye icon from lucide-react is also imported if it's used elsewhere, or rename one of the Eye components.
-// For instance, if Eye from lucide-react is used in Logo.tsx, it's fine.
-// If both were intended for this file, one needs renaming. I've assumed EyeIllustration is local and Eye in Logo is from lucide.
-// If Eye from lucide-react was also meant to be used directly in this file, you'd import it like:
-// import { Eye as LucideEye } from 'lucide-react';
-// And then use <LucideEye />
